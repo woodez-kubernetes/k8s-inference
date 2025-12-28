@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - release-dev
-
+    paths-ignore:
+      - '**.md'
 
 jobs:
   deploy_llm_app: 

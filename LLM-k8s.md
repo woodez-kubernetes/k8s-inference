@@ -72,7 +72,7 @@ kubectl logs -n monitoring -l app.kubernetes.io/name=ollama -c ollama -f
    ```yaml
    spec:
      source:
-       repoURL: https://github.com/YOUR_USERNAME/k8s-watchdog.git  # <-- Update this
+       repoURL: https://github.com/woodez-kubernetes/k8s-inference/tree/release-dev 
    ```
 
 2. **Push to git**:
@@ -124,6 +124,11 @@ curl http://localhost:11434/api/generate -d '{
   "prompt": "Explain this Kubernetes error in one sentence: CrashLoopBackOff",
   "stream": false
 }'
+```
+
+**Just pull out reponse:**
+```bash
+curl http://localhost:11434/api/generate -d '{"model": "llama3.2:1b", "prompt": "Give me an ansible playbook to install http server", "stream": false}' | jq -r '.response'
 ```
 
 **Test with K8s error analysis prompt:**
@@ -227,72 +232,6 @@ kubectl describe pod -n monitoring -l app.kubernetes.io/name=ollama | grep -A 20
 ### Check Main Container
 ```bash
 kubectl logs -n monitoring -l app.kubernetes.io/name=ollama -c ollama
-```
-
-### Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Init container timeout | Slow network/large model | Increase timeout or use smaller model |
-| OOMKilled | Insufficient memory | Increase memory limits |
-| Pod pending | No resources | Check node capacity, adjust requests |
-| Model not found | Pull failed | Check init container logs |
-
-### Manually Pull Model (if init fails)
-
-```bash
-# Exec into the pod
-kubectl exec -it -n monitoring deployment/ollama -- /bin/sh
-
-# Pull model manually
-ollama pull llama3.2:1b
-
-# Verify
-ollama list
-```
-
----
-
-## Service Endpoints
-
-Once deployed, Ollama is accessible within the cluster at:
-
-```
-http://ollama.monitoring.svc:11434
-```
-
-API Endpoints:
-- `GET /` - Health check
-- `GET /api/tags` - List models
-- `POST /api/generate` - Generate text
-- `POST /api/chat` - Chat completion
-- `POST /api/embeddings` - Generate embeddings
-
----
-
-## Integration with K8s Watchdog
-
-The watchdog service will connect to Ollama using:
-
-```python
-LLM_ENDPOINT = "http://ollama.monitoring.svc:11434"
-LLM_MODEL = "llama3.2:1b"
-```
-
-Example analysis request from watchdog:
-```python
-import requests
-
-response = requests.post(
-    f"{LLM_ENDPOINT}/api/generate",
-    json={
-        "model": LLM_MODEL,
-        "prompt": f"Analyze this K8s error: {error_message}",
-        "stream": False
-    },
-    timeout=10
-)
-summary = response.json()["response"]
 ```
 
 ---

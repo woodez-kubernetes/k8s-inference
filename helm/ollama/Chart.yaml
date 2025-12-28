@@ -1,0 +1,13 @@
+apiVersion: v2
+name: ollama
+description: A Helm chart for deploying Ollama LLM server
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - ollama
+  - llm
+  - llama
+  - ai
+maintainers:
+  - name: k8s-watchdog

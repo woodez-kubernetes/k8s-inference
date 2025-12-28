@@ -1,0 +1,61 @@
+# Default values for Ollama Helm chart
+
+replicaCount: 1
+
+image:
+  repository: ollama/ollama
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Model to pull on startup
+model:
+  name: "llama3.2:1b"
+  pullOnStartup: true
+
+service:
+  type: ClusterIP
+  port: 11434
+
+resources:
+  requests:
+    memory: "2Gi"
+    cpu: "1"
+  limits:
+    memory: "4Gi"
+    cpu: "2"
+
+# GPU support (optional)
+gpu:
+  enabled: false
+  # nvidia.com/gpu: 1
+
+persistence:
+  enabled: false
+  # If enabled, uses PVC instead of emptyDir
+  size: 10Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Probes
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Namespace to deploy to
+namespace: monitoring

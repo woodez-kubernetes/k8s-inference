@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-ollama-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Update this to your git repo URL
+    repoURL: https://github.com/woodez-kubernetes/k8s-inference.git
+    targetRevision: release-dev
+    path: helm/ollama
+    helm:
+      valueFiles:
+        - values.yaml
+      # Override values if needed
+      # values: |
+      #   model:
+      #     name: "llama3.2:1b"
+      #   persistence:
+      #     enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

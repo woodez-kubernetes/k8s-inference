@@ -1,0 +1,64 @@
+name: Deploy LLM to K8s
+
+on:
+  push:
+    branches:
+      - release-dev
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  deploy_llm_app: 
+    name: Setup ArgoCD Application
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean up ArgoCD
+        run: |
+          if [[ -f "/home/github-runner/argocd" ]]; then
+             echo "Removing existing /home/github-runner/argocd directory"
+             rm -rf /home/github-runner/argocd
+          else
+            echo "/home/github-runner/argocd does not exist, proceeding."
+          fi
+
+      - name: Setup ArghoCD CLI
+        uses: clowdhaus/argo-cd-action@main
+        with:
+          version: 2.13.8
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username ${{ secrets.ARGOCD_USERNAME }} \
+            --password ${{ secrets.ARGOCD_PASSWORD }} \
+            --insecure
+            
+      - name: Add GitOps Repository to ArgoCD (If not exist)
+        id: add_repo
+        run: |
+          echo "Attempting to add repository: ${{ secrets.GIT_REPO_URL }}"
+          argocd repo add ${{ secrets.GIT_REPO_URL }} || echo "Repository likely already exists in ArgoCD, continuing..."
+      
+      - name: Check if Application Exists and Create if Missing
+        run: |
+          APP_NAME="k8s-ollama-app"
+
+          if argocd app get $APP_NAME &>/dev/null; then
+            echo "ArgoCD Application '$APP_NAME' already exists."
+            argocd app sync $APP_NAME --prune --timeout 300
+            echo "Application synced successfully"
+          else
+            echo "ArgoCD Application $APP_NAME does not exist. Creating.."
+            argocd app create $APP_NAME --file ./argocd/k8s-ollama-app.yaml --upsert
+
+            echo "Waiting for ArgoCD to finish creating the application..."
+            sleep 10
+
+            echo "Attempting initial sync..."
+            argocd app sync $APP_NAME --prune --timeout 300 || echo "Initial sync may still be processing"
+            echo "Application created and initial sync triggered"
+          fi

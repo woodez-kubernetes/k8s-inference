@@ -16,6 +16,17 @@ service:
   type: ClusterIP
   port: 11434
 
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: llm.apexkube.xyz
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 resources:
   requests:
     memory: "2Gi"

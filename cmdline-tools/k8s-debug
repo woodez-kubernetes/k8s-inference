@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+k8s-debug - A command-line tool to analyze Kubernetes errors using LLM
+
+Usage:
+    kubectl logs my-pod | k8s-debug
+    kubectl describe pod my-pod | k8s-debug
+    cat error.log | k8s-debug
+    k8s-debug < error.log
+"""
+
+import sys
+import argparse
+import json
+import requests
+from typing import Optional
+
+
+class K8sDebugger:
+    """Debug Kubernetes errors using Ollama LLM"""
+
+    def __init__(self,
+                 ollama_url: str = "http://llm.apexkube.xyz",
+                 model: str = "llama3.2:1b",
+                 verbose: bool = False):
+        self.ollama_url = ollama_url.rstrip('/')
+        self.model = model
+        self.verbose = verbose
+
+    def log(self, message: str):
+        """Print verbose messages"""
+        if self.verbose:
+            print(f"[DEBUG] {message}", file=sys.stderr)
+
+    def test_connection(self) -> bool:
+        """Test if Ollama is accessible"""
+        try:
+            response = requests.get(f"{self.ollama_url}/", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"Error: Cannot connect to Ollama at {self.ollama_url}", file=sys.stderr)
+            print(f"Details: {e}", file=sys.stderr)
+            print("\nTip: Make sure Ollama is running and accessible.", file=sys.stderr)
+            print("Check that http://llm.apexkube.xyz is reachable from your network.", file=sys.stderr)
+            return False
+
+    def analyze_error(self, error_text: str, analysis_type: str = "explain") -> Optional[str]:
+        """Send error to LLM for analysis"""
+
+        # Prepare the prompt based on analysis type
+        prompts = {
+            "explain": f"""You are a Kubernetes troubleshooting expert. Analyze the following error or log output and provide:
+1. A brief explanation of what's happening
+2. The most likely cause
+3. Specific steps to fix it
+
+Error/Log:
+{error_text}
+
+Response:""",
+            "quick": f"""You are a Kubernetes expert. In 2-3 sentences, explain this error and how to fix it:
+
+{error_text}""",
+            "debug": f"""You are a Kubernetes expert. Provide detailed debugging steps for this issue:
+
+{error_text}
+
+Include:
+- What to check first
+- Relevant kubectl commands to run
+- Common causes and solutions""",
+        }
+
+        prompt = prompts.get(analysis_type, prompts["explain"])
+
+        self.log(f"Sending {len(error_text)} chars to {self.model}")
+
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=60
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "").strip()
+            else:
+                print(f"Error: Ollama API returned status {response.status_code}", file=sys.stderr)
+                return None
+
+        except requests.exceptions.Timeout:
+            print("Error: Request timed out. The LLM might be processing a large input.", file=sys.stderr)
+            return None
+        except Exception as e:
+            print(f"Error querying LLM: {e}", file=sys.stderr)
+            return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Analyze Kubernetes errors using LLM",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  kubectl logs my-pod | k8s-debug
+  kubectl describe pod my-pod | k8s-debug --mode debug
+  k8s-debug --url http://ollama.example.com:11434 < error.log
+
+Modes:
+  quick   - Brief 2-3 sentence explanation
+  explain - Detailed explanation with fix steps (default)
+  debug   - Comprehensive debugging guide with kubectl commands
+        """
+    )
+
+    parser.add_argument(
+        "--url",
+        default="http://llm.apexkube.xyz",
+        help="Ollama API URL (default: http://llm.apexkube.xyz)"
+    )
+
+    parser.add_argument(
+        "--model",
+        default="llama3.2:1b",
+        help="Model to use (default: llama3.2:1b)"
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=["quick", "explain", "debug"],
+        default="explain",
+        help="Analysis mode (default: explain)"
+    )
+
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose output"
+    )
+
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Test connection to Ollama and exit"
+    )
+
+    args = parser.parse_args()
+
+    # Initialize debugger
+    debugger = K8sDebugger(
+        ollama_url=args.url,
+        model=args.model,
+        verbose=args.verbose
+    )
+
+    # Test connection if requested
+    if args.test:
+        if debugger.test_connection():
+            print("✓ Successfully connected to Ollama")
+            return 0
+        else:
+            return 1
+
+    # Check connection before processing
+    if not debugger.test_connection():
+        return 1
+
+    # Read from stdin
+    debugger.log("Reading from stdin...")
+
+    if sys.stdin.isatty():
+        print("Error: No input provided. Please pipe data to this command.", file=sys.stderr)
+        print("Example: kubectl logs my-pod | k8s-debug", file=sys.stderr)
+        return 1
+
+    input_text = sys.stdin.read().strip()
+
+    if not input_text:
+        print("Error: Empty input received", file=sys.stderr)
+        return 1
+
+    debugger.log(f"Received {len(input_text)} characters")
+
+    # Analyze the error
+    print("Analyzing with LLM...\n", file=sys.stderr)
+
+    result = debugger.analyze_error(input_text, args.mode)
+
+    if result:
+        print(result)
+        return 0
+    else:
+        print("Failed to get analysis from LLM", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

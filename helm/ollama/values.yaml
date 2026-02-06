@@ -12,6 +12,11 @@ model:
   name: "llama3.2:1b"
   pullOnStartup: true
 
+# Ollama configuration
+ollama:
+  # Allow requests from all origins (* allows all, or specify comma-separated origins)
+  origins: "*"
+
 service:
   type: ClusterIP
   port: 11434

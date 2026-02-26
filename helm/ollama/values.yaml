@@ -12,9 +12,25 @@ model:
   name: "llama3.2:1b"
   pullOnStartup: true
 
+# Ollama configuration
+ollama:
+  # Allow requests from all origins (* allows all, or specify comma-separated origins)
+  origins: "*"
+
 service:
   type: ClusterIP
   port: 11434
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: llm.apexkube.xyz
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
 
 resources:
   requests:

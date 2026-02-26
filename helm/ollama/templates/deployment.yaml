@@ -71,8 +71,10 @@ spec:
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
-          {{- if .Values.gpu.enabled }}
           env:
+            - name: OLLAMA_ORIGINS
+              value: {{ .Values.ollama.origins | quote }}
+          {{- if .Values.gpu.enabled }}
             - name: NVIDIA_VISIBLE_DEVICES
               value: "all"
           {{- end }}
